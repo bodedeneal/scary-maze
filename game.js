@@ -209,25 +209,9 @@ const animate = function () {
     prevTime = time;
 };
 
-// --- Initial Spawn and Game Start ---
-function startGame() {
-    let spawnPointFound = false;
-    for (let y = 0; y < MAZE_SIZE && !spawnPointFound; y++) {
-        for (let x = 0; x < MAZE_SIZE && !spawnPointFound; x++) {
-            if (generatedMaze[y][x] === 0) {
-                camera.position.set(
-                    (x - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2,
-                    WALL_HEIGHT / 2 + PLAYER_HEIGHT,
-                    (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
-                );
-                spawnPointFound = true;
-            }
-        }
-    }
-    animate();
-}
-
-startGame();
+// Initial position and start animation
+camera.position.set(0, WALL_HEIGHT / 2 + PLAYER_HEIGHT, MAZE_SIZE * CELL_SIZE / 2 + CELL_SIZE);
+animate();
 
 // --- Handle Window Resizing ---
 window.addEventListener('resize', () => {
@@ -235,4 +219,3 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
-

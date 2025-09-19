@@ -28,7 +28,7 @@ function generateMaze(size) {
     const maze = new Array(size).fill(0).map(() => new Array(size).fill(1));
     function carvePath(x, y) {
         maze[y][x] = 0;
-        const directions = [[0, -2], [2, 0], [0, 2], [-2, 0]].sort(() => Math.random() - 0.5);
+        const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
         for (const [dx, dy] of directions) {
             const nextX = x + dx;
             const nextY = y + dy;
@@ -42,17 +42,11 @@ function generateMaze(size) {
     return maze;
 }
 
-// --- Texture Loader ---
-const textureLoader = new THREE.TextureLoader();
-const wallTexture = textureLoader.load('brick_texture.jpg');
-wallTexture.wrapS = THREE.RepeatWrapping;
-wallTexture.wrapT = THREE.RepeatWrapping;
-
 // --- Build Maze Geometry ---
 const walls = [];
 function createMazeMesh(maze) {
     const group = new THREE.Group();
-    const wallMaterial = new THREE.MeshPhongMaterial({ map: wallTexture });
+    const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x555555 });
     const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
     const totalSize = MAZE_SIZE * CELL_SIZE;
 
@@ -82,17 +76,6 @@ function createMazeMesh(maze) {
                     0,
                     (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
                 );
-                // Adjust UV mapping for repeating texture
-                wallGeometry.attributes.uv.array[0] = 0;
-                wallGeometry.attributes.uv.array[1] = 0;
-                wallGeometry.attributes.uv.array[2] = 1;
-                wallGeometry.attributes.uv.array[3] = 0;
-                wallGeometry.attributes.uv.array[4] = 1;
-                wallGeometry.attributes.uv.array[5] = 1;
-                wallGeometry.attributes.uv.array[6] = 0;
-                wallGeometry.attributes.uv.array[7] = 1;
-                wallMesh.geometry.attributes.uv.needsUpdate = true;
-                
                 group.add(wallMesh);
                 walls.push(wallMesh);
             }
@@ -157,25 +140,31 @@ function checkCollisions() {
     const playerPosition = controls.getObject().position;
     const halfCellSize = CELL_SIZE / 2;
 
+    const collisionDirections = [
+        new THREE.Vector3(0, 0, -1), // Forward
+        new THREE.Vector3(0, 0, 1),  // Backward
+        new THREE.Vector3(-1, 0, 0), // Left
+        new THREE.Vector3(1, 0, 0)   // Right
+    ];
+
     const currentDirection = new THREE.Vector3();
     controls.getDirection(currentDirection);
 
     const horizontalDirection = new THREE.Vector3(currentDirection.x, 0, currentDirection.z).normalize();
     const rightDirection = new THREE.Vector3(horizontalDirection.z, 0, -horizontalDirection.x);
 
-    const checkDir = (dir) => {
+    const checkDir = (dir, speed) => {
         raycaster.set(playerPosition, dir);
         const intersects = raycaster.intersectObjects(walls);
         if (intersects.length > 0 && intersects[0].distance < halfCellSize + 0.1) {
-            return true;
+            speed.set(0, 0, 0);
         }
-        return false;
     };
     
-    if (moveForward && checkDir(horizontalDirection)) velocity.z = 0;
-    if (moveBackward && checkDir(horizontalDirection.negate())) velocity.z = 0;
-    if (moveRight && checkDir(rightDirection)) velocity.x = 0;
-    if (moveLeft && checkDir(rightDirection.negate())) velocity.x = 0;
+    if (moveForward) checkDir(horizontalDirection, velocity);
+    if (moveBackward) checkDir(horizontalDirection.negate(), velocity);
+    if (moveRight) checkDir(rightDirection, velocity);
+    if (moveLeft) checkDir(rightDirection.negate(), velocity);
 }
 
 

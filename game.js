@@ -7,8 +7,8 @@ document.body.appendChild(renderer.domElement);
 
 // --- Maze Generation Parameters ---
 const MAZE_SIZE = 21; // Must be an odd number
-const CELL_SIZE = 5;
-const WALL_HEIGHT = 50; // Walls are 5x taller
+const CELL_SIZE = 10; // Wider path spacing
+const WALL_HEIGHT = 100; // Much taller walls
 const WALL_THICKNESS = 1;
 
 // --- Load Brick Texture and Setup Scene ---
@@ -47,7 +47,7 @@ function createGame() {
 
         function carvePath(x, y) {
             maze[y][x] = 0;
-            const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
+            const directions = [[0, -2], [-2, 0], [0, 2], [2, 0]].sort(() => Math.random() - 0.5);
 
             for (const [dx, dy] of directions) {
                 const nextX = x + dx;
@@ -108,6 +108,16 @@ function createGame() {
     const mazeMesh = createMazeMesh(generatedMaze);
     scene.add(mazeMesh);
 
+    // --- Lighting ---
+    const ambientLight = new THREE.AmbientLight(0x111111); // Low ambient light
+    scene.add(ambientLight);
+
+    const flashlight = new THREE.SpotLight(0xffffff, 1, 100, Math.PI / 6, 0.5);
+    flashlight.position.set(0, 0, 0); // Initially at the origin
+    flashlight.target.position.set(0, 0, -1); // Point straight ahead
+    camera.add(flashlight); // Attach to camera for a movable flashlight
+    scene.add(camera);
+
     // --- PointerLockControls Setup ---
     const controls = new THREE.PointerLockControls(camera, renderer.domElement);
     const blocker = document.getElementById('blocker');
@@ -139,6 +149,7 @@ function createGame() {
     const playerSpeed = 100.0;
     const jumpHeight = 30;
     const playerBoundingBox = new THREE.Box3();
+    const playerHeight = 2; // For collision purposes
 
     const onKeyDown = function (event) {
         switch (event.code) {
@@ -200,7 +211,7 @@ function createGame() {
         if (controls.isLocked === true) {
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
-            velocity.y -= 9.8 * 10.0 * delta; // Re-apply gravity
+            velocity.y -= 9.8 * 10.0 * delta; // Gravity
 
             direction.z = Number(moveForward) - Number(moveBackward);
             direction.x = Number(moveRight) - Number(moveLeft);
@@ -215,7 +226,7 @@ function createGame() {
             controls.getObject().position.y += (velocity.y * delta);
 
             // Collision Detection
-            playerBoundingBox.setFromCenterAndSize(camera.position, new THREE.Vector3(1, 2, 1));
+            playerBoundingBox.setFromCenterAndSize(camera.position, new THREE.Vector3(1, playerHeight, 1));
             for (let i = 0; i < walls.length; i++) {
                 const wallBoundingBox = new THREE.Box3().setFromObject(walls[i]);
                 if (playerBoundingBox.intersectsBox(wallBoundingBox)) {

@@ -12,17 +12,25 @@ const floor = new THREE.Mesh(geometry, material);
 floor.rotation.x = Math.PI / 2;
 scene.add(floor);
 
-// Create and position a couch (requires a couch.glb model)
-function loadCouch() {
-    const loader = new THREE.GLTFLoader();
-    loader.load('path/to/your/couch.glb', function(gltf) {
-        const couch = gltf.scene;
-        couch.scale.set(0.1, 0.1, 0.1);
-        couch.position.set(5, 0, 0);
-        scene.add(couch);
-    });
-}
-loadCouch();
+// --- Wall Creation ---
+const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+const wallHeight = 5;
+
+// Create the left part of the wall
+const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(10, wallHeight, 1), wallMaterial);
+wallLeft.position.set(-5, wallHeight / 2, -10);
+scene.add(wallLeft);
+
+// Create the right part of the wall
+const wallRight = new THREE.Mesh(new THREE.BoxGeometry(10, wallHeight, 1), wallMaterial);
+wallRight.position.set(5, wallHeight / 2, -10);
+scene.add(wallRight);
+
+// Create the central movable part of the wall
+const wallCenter = new THREE.Mesh(new THREE.BoxGeometry(5, wallHeight, 1), wallMaterial);
+wallCenter.position.set(0, wallHeight / 2, -10);
+scene.add(wallCenter);
+let wallOpen = false;
 
 // --- PointerLockControls Setup ---
 const controls = new THREE.PointerLockControls(camera, renderer.domElement);
@@ -75,6 +83,26 @@ const onKeyDown = function (event) {
         case 'Space':
             if (canJump === true) velocity.y += 10;
             canJump = false;
+            break;
+        case 'KeyE':
+            // Check if player is near the wall before opening
+            const distance = camera.position.distanceTo(wallCenter.position);
+            if (distance < 5) {
+                wallOpen = !wallOpen; // Toggle the wall state
+                if (wallOpen) {
+                    // Animate the wall to open
+                    new TWEEN.Tween(wallCenter.position)
+                        .to({ y: wallHeight + 5 }, 1000)
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .start();
+                } else {
+                    // Animate the wall to close
+                    new TWEEN.Tween(wallCenter.position)
+                        .to({ y: wallHeight / 2 }, 1000)
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .start();
+                }
+            }
             break;
     }
 };
@@ -134,6 +162,7 @@ const animate = function () {
         }
     }
 
+    TWEEN.update(); // Update the tween animation
     renderer.render(scene, camera);
     prevTime = time;
 };

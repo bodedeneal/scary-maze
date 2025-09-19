@@ -28,7 +28,7 @@ function generateMaze(size) {
     const maze = new Array(size).fill(0).map(() => new Array(size).fill(1));
     function carvePath(x, y) {
         maze[y][x] = 0;
-        const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
+        const directions = [[0, -2], [2, 0], [0, 2], [-2, 0]].sort(() => Math.random() - 0.5);
         for (const [dx, dy] of directions) {
             const nextX = x + dx;
             const nextY = y + dy;
@@ -44,10 +44,9 @@ function generateMaze(size) {
 
 // --- Texture Loader ---
 const textureLoader = new THREE.TextureLoader();
-const wallTexture = textureLoader.load('path/to/your/brick_texture.jpg');
+const wallTexture = textureLoader.load('brick_texture.jpg');
 wallTexture.wrapS = THREE.RepeatWrapping;
 wallTexture.wrapT = THREE.RepeatWrapping;
-wallTexture.repeat.set(CELL_SIZE / 2, WALL_HEIGHT / 2);
 
 // --- Build Maze Geometry ---
 const walls = [];
@@ -83,6 +82,17 @@ function createMazeMesh(maze) {
                     0,
                     (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
                 );
+                // Adjust UV mapping for repeating texture
+                wallGeometry.attributes.uv.array[0] = 0;
+                wallGeometry.attributes.uv.array[1] = 0;
+                wallGeometry.attributes.uv.array[2] = 1;
+                wallGeometry.attributes.uv.array[3] = 0;
+                wallGeometry.attributes.uv.array[4] = 1;
+                wallGeometry.attributes.uv.array[5] = 1;
+                wallGeometry.attributes.uv.array[6] = 0;
+                wallGeometry.attributes.uv.array[7] = 1;
+                wallMesh.geometry.attributes.uv.needsUpdate = true;
+                
                 group.add(wallMesh);
                 walls.push(wallMesh);
             }

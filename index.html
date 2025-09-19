@@ -5,9 +5,16 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/FirstPersonControls.js"></script>
+    <!-- Add the PointerLockControls script -->
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
+    <div id="blocker">
+        <div id="instructions">
+            <p>Click to Play</p>
+            <p>Move: WASD<br/>Jump: SPACE<br/>Look: Mouse</p>
+        </div>
+    </div>
     <script src="game.js"></script>
 </body>
 </html>

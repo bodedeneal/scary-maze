@@ -42,11 +42,18 @@ function generateMaze(size) {
     return maze;
 }
 
+// --- Texture Loader ---
+const textureLoader = new THREE.TextureLoader();
+const wallTexture = textureLoader.load('path/to/your/brick_texture.jpg');
+wallTexture.wrapS = THREE.RepeatWrapping;
+wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.repeat.set(CELL_SIZE / 2, WALL_HEIGHT / 2);
+
 // --- Build Maze Geometry ---
 const walls = [];
 function createMazeMesh(maze) {
     const group = new THREE.Group();
-    const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x555555 });
+    const wallMaterial = new THREE.MeshPhongMaterial({ map: wallTexture });
     const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
     const totalSize = MAZE_SIZE * CELL_SIZE;
 
@@ -140,31 +147,25 @@ function checkCollisions() {
     const playerPosition = controls.getObject().position;
     const halfCellSize = CELL_SIZE / 2;
 
-    const collisionDirections = [
-        new THREE.Vector3(0, 0, -1), // Forward
-        new THREE.Vector3(0, 0, 1),  // Backward
-        new THREE.Vector3(-1, 0, 0), // Left
-        new THREE.Vector3(1, 0, 0)   // Right
-    ];
-
     const currentDirection = new THREE.Vector3();
     controls.getDirection(currentDirection);
 
     const horizontalDirection = new THREE.Vector3(currentDirection.x, 0, currentDirection.z).normalize();
     const rightDirection = new THREE.Vector3(horizontalDirection.z, 0, -horizontalDirection.x);
 
-    const checkDir = (dir, speed) => {
+    const checkDir = (dir) => {
         raycaster.set(playerPosition, dir);
         const intersects = raycaster.intersectObjects(walls);
         if (intersects.length > 0 && intersects[0].distance < halfCellSize + 0.1) {
-            speed.set(0, 0, 0);
+            return true;
         }
+        return false;
     };
     
-    if (moveForward) checkDir(horizontalDirection, velocity);
-    if (moveBackward) checkDir(horizontalDirection.negate(), velocity);
-    if (moveRight) checkDir(rightDirection, velocity);
-    if (moveLeft) checkDir(rightDirection.negate(), velocity);
+    if (moveForward && checkDir(horizontalDirection)) velocity.z = 0;
+    if (moveBackward && checkDir(horizontalDirection.negate())) velocity.z = 0;
+    if (moveRight && checkDir(rightDirection)) velocity.x = 0;
+    if (moveLeft && checkDir(rightDirection.negate())) velocity.x = 0;
 }
 
 
@@ -235,3 +236,4 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+

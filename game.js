@@ -28,7 +28,7 @@ function generateMaze(size) {
     const maze = new Array(size).fill(0).map(() => new Array(size).fill(1));
     function carvePath(x, y) {
         maze[y][x] = 0;
-        const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
+        const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
         for (const [dx, dy] of directions) {
             const nextX = x + dx;
             const nextY = y + dy;
@@ -89,7 +89,7 @@ const { group: mazeMesh } = createMazeMesh(generatedMaze);
 scene.add(mazeMesh);
 
 // --- Player Controls and Movement ---
-let controls;
+let controls = new THREE.PointerLockControls(camera, renderer.domElement);
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -100,17 +100,14 @@ const direction = new THREE.Vector3();
 const playerSpeed = 100.0;
 const jumpHeight = 30;
 
-// Initialize controls and lock pointer on first user interaction
+// Lock pointer on first user interaction
 document.body.addEventListener('click', function () {
-    if (!controls) {
-        controls = new THREE.PointerLockControls(camera, renderer.domElement);
-        controls.lock();
-    }
+    controls.lock();
 }, false);
 
 // Event listeners for movement
 const onKeyDown = function (event) {
-    if (controls && controls.isLocked) {
+    if (controls.isLocked) {
         switch (event.code) {
             case 'ArrowUp': case 'KeyW': moveForward = true; break;
             case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
@@ -122,7 +119,7 @@ const onKeyDown = function (event) {
 };
 
 const onKeyUp = function (event) {
-    if (controls && controls.isLocked) {
+    if (controls.isLocked) {
         switch (event.code) {
             case 'ArrowUp': case 'KeyW': moveForward = false; break;
             case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
@@ -141,26 +138,30 @@ const raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 
 function checkCollisions() {
     if (!controls) return;
     const playerPosition = controls.getObject().position;
-    const currentDirection = new THREE.Vector3();
-    controls.getDirection(currentDirection);
+    const playerDirection = controls.getDirection(new THREE.Vector3());
+    const playerUp = camera.up;
 
-    const checkDir = (dir, speed) => {
-        raycaster.set(playerPosition, dir);
-        const intersects = raycaster.intersectObjects(walls);
-        if (intersects.length > 0 && intersects[0].distance < CELL_SIZE / 2) {
-            speed.set(0, 0, 0);
-        }
-    };
-    
-    // Check for collisions in movement direction
-    const horizontalDirection = new THREE.Vector3(currentDirection.x, 0, currentDirection.z).normalize();
-    const rightDirection = new THREE.Vector3(horizontalDirection.z, 0, -horizontalDirection.x);
-    
-    if (moveForward) checkDir(horizontalDirection, velocity);
-    if (moveBackward) checkDir(horizontalDirection.negate(), velocity);
-    if (moveRight) checkDir(rightDirection, velocity);
-    if (moveLeft) checkDir(rightDirection.negate(), velocity);
+    // Check forward/backward collisions
+    const forwardRaycaster = new THREE.Raycaster(playerPosition, playerDirection, 0, CELL_SIZE / 2);
+    if (forwardRaycaster.intersectObjects(walls).length > 0) {
+        velocity.z = 0;
+    }
+    const backwardRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().negate(), 0, CELL_SIZE / 2);
+    if (backwardRaycaster.intersectObjects(walls).length > 0) {
+        velocity.z = 0;
+    }
+
+    // Check left/right collisions
+    const rightRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().cross(playerUp), 0, CELL_SIZE / 2);
+    if (rightRaycaster.intersectObjects(walls).length > 0) {
+        velocity.x = 0;
+    }
+    const leftRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().cross(playerUp).negate(), 0, CELL_SIZE / 2);
+    if (leftRaycaster.intersectObjects(walls).length > 0) {
+        velocity.x = 0;
+    }
 }
+
 
 // --- Animation Loop ---
 let prevTime = performance.now();
@@ -183,7 +184,7 @@ const animate = function () {
         if (moveForward || moveBackward) velocity.z -= direction.z * playerSpeed * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * playerSpeed * delta;
 
-        // Perform simplified collision detection
+        // Perform collision detection
         checkCollisions();
 
         // Apply final velocity to position
@@ -191,7 +192,7 @@ const animate = function () {
         controls.moveForward(-velocity.z * delta);
         controls.getObject().position.y += (velocity.y * delta);
 
-        // Reset player to ground if falling too far
+        // Reset player to ground if falling
         if (controls.getObject().position.y < WALL_HEIGHT / 2 + PLAYER_HEIGHT) {
             velocity.y = 0;
             controls.getObject().position.y = WALL_HEIGHT / 2 + PLAYER_HEIGHT;

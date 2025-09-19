@@ -8,13 +8,14 @@ document.body.appendChild(renderer.domElement);
 // --- Maze Generation Parameters ---
 const MAZE_SIZE = 21; // Must be an odd number
 const CELL_SIZE = 5;
-const WALL_HEIGHT = 10; // Taller walls
+const WALL_HEIGHT = 50; // Walls are 5x taller
 const WALL_THICKNESS = 1;
 
 // --- Load Brick Texture and Setup Scene ---
 const textureLoader = new THREE.TextureLoader();
 let brickTexture;
 let wallMaterial;
+let walls = []; // Store wall meshes for collision detection
 
 textureLoader.load('brick.jpg',
     // onLoad callback
@@ -22,7 +23,7 @@ textureLoader.load('brick.jpg',
         brickTexture = texture;
         brickTexture.wrapS = THREE.RepeatWrapping;
         brickTexture.wrapT = THREE.RepeatWrapping;
-        brickTexture.repeat.set(2, 4);
+        brickTexture.repeat.set(0.5, 0.5); // Make texture larger
         wallMaterial = new THREE.MeshBasicMaterial({ map: brickTexture });
         createGame();
     },
@@ -46,7 +47,7 @@ function createGame() {
 
         function carvePath(x, y) {
             maze[y][x] = 0;
-            const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
+            const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
 
             for (const [dx, dy] of directions) {
                 const nextX = x + dx;
@@ -96,10 +97,10 @@ function createGame() {
                         (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
                     );
                     group.add(wallMesh);
+                    walls.push(wallMesh);
                 }
             }
         }
-
         return group;
     }
 
@@ -126,15 +127,18 @@ function createGame() {
         instructions.style.display = '';
     });
 
-    // --- Player Movement Logic ---
+    // --- Player Movement Logic with Collision ---
     let moveForward = false;
     let moveBackward = false;
     let moveLeft = false;
     let moveRight = false;
+    let canJump = false;
 
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
     const playerSpeed = 100.0;
+    const jumpHeight = 30;
+    const playerBoundingBox = new THREE.Box3();
 
     const onKeyDown = function (event) {
         switch (event.code) {
@@ -153,6 +157,10 @@ function createGame() {
             case 'ArrowRight':
             case 'KeyD':
                 moveRight = true;
+                break;
+            case 'Space':
+                if (canJump === true) velocity.y += jumpHeight;
+                canJump = false;
                 break;
         }
     };
@@ -192,6 +200,7 @@ function createGame() {
         if (controls.isLocked === true) {
             velocity.x -= velocity.x * 10.0 * delta;
             velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= 9.8 * 10.0 * delta; // Re-apply gravity
 
             direction.z = Number(moveForward) - Number(moveBackward);
             direction.x = Number(moveRight) - Number(moveLeft);
@@ -200,16 +209,44 @@ function createGame() {
             if (moveForward || moveBackward) velocity.z -= direction.z * playerSpeed * delta;
             if (moveLeft || moveRight) velocity.x -= direction.x * playerSpeed * delta;
 
+            const oldPosition = camera.position.clone();
             controls.moveRight(-velocity.x * delta);
             controls.moveForward(-velocity.z * delta);
-        }
+            controls.getObject().position.y += (velocity.y * delta);
 
+            // Collision Detection
+            playerBoundingBox.setFromCenterAndSize(camera.position, new THREE.Vector3(1, 2, 1));
+            for (let i = 0; i < walls.length; i++) {
+                const wallBoundingBox = new THREE.Box3().setFromObject(walls[i]);
+                if (playerBoundingBox.intersectsBox(wallBoundingBox)) {
+                    camera.position.copy(oldPosition); // Revert to old position on collision
+                }
+            }
+            
+            // Ground check
+            if (controls.getObject().position.y < WALL_HEIGHT / 2 + 1) {
+                velocity.y = 0;
+                controls.getObject().position.y = WALL_HEIGHT / 2 + 1;
+                canJump = true;
+            }
+        }
         renderer.render(scene, camera);
         prevTime = time;
     };
 
     // --- Game Logic ---
-    camera.position.set(0, WALL_HEIGHT / 2 + 1, (MAZE_SIZE * CELL_SIZE / 2));
+    // Start player at a random valid cell within the maze
+    let startX, startZ;
+    do {
+        startX = Math.floor(Math.random() * (MAZE_SIZE - 2)) + 1;
+        startZ = Math.floor(Math.random() * (MAZE_SIZE - 2)) + 1;
+    } while (generatedMaze[startZ][startX] === 1);
+    camera.position.set(
+        (startX - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2,
+        WALL_HEIGHT / 2 + 1,
+        (startZ - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
+    );
+    
     animate();
 }
 

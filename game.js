@@ -1,4 +1,4 @@
-// --- Initial Setup (unchanged) ---
+// --- Initial Setup (mostly unchanged) ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer();
@@ -8,38 +8,42 @@ document.body.appendChild(renderer.domElement);
 // --- Maze Generation Parameters ---
 const MAZE_SIZE = 21; // Must be an odd number
 const CELL_SIZE = 5;
-const WALL_HEIGHT = 5;
+const WALL_HEIGHT = 10; // Taller walls
 const WALL_THICKNESS = 1;
+
+// --- Load Brick Texture ---
+const textureLoader = new THREE.TextureLoader();
+const brickTexture = textureLoader.load('brick.jpg');
+brickTexture.wrapS = THREE.RepeatWrapping;
+brickTexture.wrapT = THREE.RepeatWrapping;
+brickTexture.repeat.set(2, 4); // Adjust repetition for a tiled look
 
 // --- Maze Generation Algorithm (Randomized DFS) ---
 function generateMaze(size) {
     const maze = new Array(size).fill(0).map(() => new Array(size).fill(1));
     const stack = [];
-    const startX = 1;
-    const startY = 1;
 
+    // Carve path using recursive backtracking
     function carvePath(x, y) {
         maze[y][x] = 0;
-        const directions = [[0, 2], [0, -2], [2, 0], [-2, 0]].sort(() => Math.random() - 0.5);
-
+        const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
         for (const [dx, dy] of directions) {
             const nextX = x + dx;
             const nextY = y + dy;
-
-            if (nextX > 0 && nextX < size && nextY > 0 && nextY < size && maze[nextY][nextX] === 1) {
+            if (nextX > 0 && nextX < size - 1 && nextY > 0 && nextY < size - 1 && maze[nextY][nextX] === 1) {
                 maze[y + dy / 2][x + dx / 2] = 0;
                 carvePath(nextX, nextY);
             }
         }
     }
-    carvePath(startX, startY);
+    carvePath(1, 1);
     return maze;
 }
 
 // --- Build Maze Geometry ---
 function createMazeMesh(maze) {
     const group = new THREE.Group();
-    const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+    const wallMaterial = new THREE.MeshBasicMaterial({ map: brickTexture });
     const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
 
     const totalSize = MAZE_SIZE * CELL_SIZE;
@@ -66,9 +70,9 @@ function createMazeMesh(maze) {
                 const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
                 const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
                 wallMesh.position.set(
-                    (x - MAZE_SIZE / 2) * CELL_SIZE,
+                    (x - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2,
                     0,
-                    (y - MAZE_SIZE / 2) * CELL_SIZE
+                    (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
                 );
                 group.add(wallMesh);
             }
@@ -106,7 +110,6 @@ let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
 let moveRight = false;
-let canJump = false;
 
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
@@ -133,10 +136,6 @@ const onKeyDown = function (event) {
         case 'ArrowRight':
         case 'KeyD':
             moveRight = true;
-            break;
-        case 'Space':
-            if (canJump === true) velocity.y += jumpHeight;
-            canJump = false;
             break;
     }
 };
@@ -176,8 +175,10 @@ const animate = function () {
     if (controls.isLocked === true) {
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
-        velocity.y -= 9.8 * 10.0 * delta; // standard gravity
-
+        
+        // Remove gravity and collision check to allow flying through walls
+        // velocity.y -= 9.8 * 10.0 * delta;
+        
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         direction.normalize();
@@ -187,13 +188,13 @@ const animate = function () {
 
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
-        controls.getObject().position.y += (velocity.y * delta);
-
-        if (controls.getObject().position.y < WALL_HEIGHT / 2 + 1) {
-            velocity.y = 0;
-            controls.getObject().position.y = WALL_HEIGHT / 2 + 1;
-            canJump = true;
-        }
+        
+        // Remove collision checks and floor clamping
+        // controls.getObject().position.y += (velocity.y * delta);
+        // if (controls.getObject().position.y < WALL_HEIGHT / 2 + 1) {
+        //     velocity.y = 0;
+        //     controls.getObject().position.y = WALL_HEIGHT / 2 + 1;
+        // }
     }
 
     renderer.render(scene, camera);
@@ -201,8 +202,8 @@ const animate = function () {
 };
 
 // --- Game Logic ---
-// Position the camera outside the maze at the start
-camera.position.set(0, WALL_HEIGHT / 2 + 1, MAZE_SIZE * CELL_SIZE / 2 + CELL_SIZE);
+// Position the camera just inside the maze entrance
+camera.position.set(0, WALL_HEIGHT / 2 + 1, (MAZE_SIZE * CELL_SIZE / 2) - (CELL_SIZE / 2));
 animate();
 
 // --- Handle Window Resizing (unchanged) ---

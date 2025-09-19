@@ -9,27 +9,24 @@ document.body.appendChild(renderer.domElement);
 const MAZE_SIZE = 21; // Must be an odd number
 const CELL_SIZE = 10; // Wider path spacing
 const WALL_HEIGHT = 100; // Much taller walls
-const WALL_THICKNESS = 1;
+
+// --- Game Variables ---
+let wallMaterial;
+const walls = []; // Store wall meshes for collision detection
+const wallHitboxes = []; // Store wall hitboxes for collision detection
+const DEBUG_HITBOXES = false; // Set to true to see hitboxes
 
 // --- Load Brick Texture and Setup Scene ---
 const textureLoader = new THREE.TextureLoader();
-let brickTexture;
-let wallMaterial;
-let wallHitboxes = []; // Store wall hitboxes for collision detection
-const DEBUG_HITBOXES = false; // Set to true to see hitboxes
-
 textureLoader.load('brick.jpg',
     // onLoad callback
     function (texture) {
-        brickTexture = texture;
-        brickTexture.wrapS = THREE.RepeatWrapping;
-        brickTexture.wrapT = THREE.RepeatWrapping;
-        brickTexture.repeat.set(0.5, 0.5);
-        wallMaterial = new THREE.MeshBasicMaterial({ map: brickTexture });
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(0.5, 0.5);
+        wallMaterial = new THREE.MeshBasicMaterial({ map: texture });
         createGame();
     },
-    // onProgress callback
-    undefined,
     // onError callback
     function () {
         console.error('An error happened while loading the texture. Using default material.');
@@ -48,7 +45,7 @@ function createGame() {
 
         function carvePath(x, y) {
             maze[y][x] = 0;
-            const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
+            const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
 
             for (const [dx, dy] of directions) {
                 const nextX = x + dx;
@@ -97,6 +94,7 @@ function createGame() {
                         (y - MAZE_SIZE / 2) * CELL_SIZE + CELL_SIZE / 2
                     );
                     group.add(wallMesh);
+                    walls.push(wallMesh); // Store wall mesh
 
                     // Create and store wall hitbox
                     const wallHitbox = new THREE.Box3().setFromObject(wallMesh);
@@ -207,7 +205,7 @@ function createGame() {
         prevTime = time;
     };
 
-    // --- Game Logic ---
+    // --- Game Start ---
     let startX, startZ;
     do {
         startX = Math.floor(Math.random() * (MAZE_SIZE - 2)) + 1;

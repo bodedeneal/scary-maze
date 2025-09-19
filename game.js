@@ -5,21 +5,23 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// --- Lights ---
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+// --- Game Settings ---
+const MAZE_SIZE = 21; // Must be an odd number
+const PLAYER_WIDTH = 2.5;
+const PLAYER_HEIGHT = 2; // Player's effective height
+const CELL_SIZE = PLAYER_WIDTH * 2;
+const WALL_HEIGHT = PLAYER_HEIGHT * 2;
+
+// --- Lights (Flashlight) ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
 scene.add(ambientLight);
 
-const spotLight = new THREE.SpotLight(0xffffff, 1, 0, Math.PI / 8, 0.5, 2);
-spotLight.position.set(0, 0, 0); // Position relative to camera
+const spotLight = new THREE.SpotLight(0xffffff, 1.5, 50, Math.PI / 8, 0.5, 2);
+spotLight.position.set(0, 0, 0);
 spotLight.target.position.set(0, 0, -1);
 camera.add(spotLight);
 camera.add(spotLight.target);
 scene.add(camera);
-
-// --- Maze Generation Parameters ---
-const MAZE_SIZE = 21; // Must be an odd number
-const CELL_SIZE = 5;
-const WALL_HEIGHT = 5;
 
 // --- Maze Generation Algorithm (Randomized DFS) ---
 function generateMaze(size) {
@@ -52,7 +54,7 @@ function createMazeMesh(maze) {
     const floorGeometry = new THREE.PlaneGeometry(totalSize, totalSize);
     const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
     floorMesh.rotation.x = -Math.PI / 2;
-    floorMesh.position.y = -WALL_HEIGHT / 2;
+    floorMesh.position.y = -(WALL_HEIGHT / 2);
     group.add(floorMesh);
 
     // Create the goal in the center
@@ -60,7 +62,7 @@ function createMazeMesh(maze) {
     const goalGeometry = new THREE.BoxGeometry(goalSize, 0.1, goalSize);
     const goalMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const goalMesh = new THREE.Mesh(goalGeometry, goalMaterial);
-    goalMesh.position.set(0, -WALL_HEIGHT / 2 + 0.1, 0);
+    goalMesh.position.set(0, -(WALL_HEIGHT / 2) + 0.1, 0);
     group.add(goalMesh);
 
     // Create walls based on the maze data
@@ -98,29 +100,17 @@ const direction = new THREE.Vector3();
 const playerSpeed = 100.0;
 const jumpHeight = 30;
 
-const blocker = document.getElementById('blocker');
-const instructions = document.getElementById('instructions');
-
-// Initialize controls on user click
-instructions.addEventListener('click', function () {
-    controls = new THREE.PointerLockControls(camera, renderer.domElement);
-    controls.lock();
+// Initialize controls and lock pointer on first user interaction
+document.body.addEventListener('click', function () {
+    if (!controls) {
+        controls = new THREE.PointerLockControls(camera, renderer.domElement);
+        controls.lock();
+    }
 }, false);
 
-// Event listeners for pointer lock status changes
-controls.addEventListener('lock', function () {
-    instructions.style.display = 'none';
-    blocker.style.display = 'none';
-});
-
-controls.addEventListener('unlock', function () {
-    blocker.style.display = 'block';
-    instructions.style.display = '';
-});
-
-// Keyboard event listeners for movement
+// Event listeners for movement
 const onKeyDown = function (event) {
-    if (controls.isLocked) {
+    if (controls && controls.isLocked) {
         switch (event.code) {
             case 'ArrowUp': case 'KeyW': moveForward = true; break;
             case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
@@ -132,11 +122,13 @@ const onKeyDown = function (event) {
 };
 
 const onKeyUp = function (event) {
-    switch (event.code) {
-        case 'ArrowUp': case 'KeyW': moveForward = false; break;
-        case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
-        case 'ArrowDown': case 'KeyS': moveBackward = false; break;
-        case 'ArrowRight': case 'KeyD': moveRight = false; break;
+    if (controls && controls.isLocked) {
+        switch (event.code) {
+            case 'ArrowUp': case 'KeyW': moveForward = false; break;
+            case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+            case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+            case 'ArrowRight': case 'KeyD': moveRight = false; break;
+        }
     }
 };
 
@@ -145,31 +137,30 @@ document.addEventListener('keyup', onKeyUp, false);
 
 // --- Collision Detection (Simplified Raycasting) ---
 const raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
-const playerRadius = 0.5;
 
 function checkCollisions() {
+    if (!controls) return;
     const playerPosition = controls.getObject().position;
+    const currentDirection = new THREE.Vector3();
+    controls.getDirection(currentDirection);
 
-    const directions = [
-        new THREE.Vector3(0, 0, 1), // Forward
-        new THREE.Vector3(0, 0, -1), // Backward
-        new THREE.Vector3(1, 0, 0), // Right
-        new THREE.Vector3(-1, 0, 0) // Left
-    ];
-
-    for (const dir of directions) {
+    const checkDir = (dir, speed) => {
         raycaster.set(playerPosition, dir);
         const intersects = raycaster.intersectObjects(walls);
-
-        if (intersects.length > 0 && intersects[0].distance < playerRadius + 0.5) {
-            if (dir.x > 0) velocity.x = 0;
-            if (dir.x < 0) velocity.x = 0;
-            if (dir.z > 0) velocity.z = 0;
-            if (dir.z < 0) velocity.z = 0;
+        if (intersects.length > 0 && intersects[0].distance < CELL_SIZE / 2) {
+            speed.set(0, 0, 0);
         }
-    }
+    };
+    
+    // Check for collisions in movement direction
+    const horizontalDirection = new THREE.Vector3(currentDirection.x, 0, currentDirection.z).normalize();
+    const rightDirection = new THREE.Vector3(horizontalDirection.z, 0, -horizontalDirection.x);
+    
+    if (moveForward) checkDir(horizontalDirection, velocity);
+    if (moveBackward) checkDir(horizontalDirection.negate(), velocity);
+    if (moveRight) checkDir(rightDirection, velocity);
+    if (moveLeft) checkDir(rightDirection.negate(), velocity);
 }
-
 
 // --- Animation Loop ---
 let prevTime = performance.now();
@@ -201,9 +192,9 @@ const animate = function () {
         controls.getObject().position.y += (velocity.y * delta);
 
         // Reset player to ground if falling too far
-        if (controls.getObject().position.y < WALL_HEIGHT / 2 + 1) {
+        if (controls.getObject().position.y < WALL_HEIGHT / 2 + PLAYER_HEIGHT) {
             velocity.y = 0;
-            controls.getObject().position.y = WALL_HEIGHT / 2 + 1;
+            controls.getObject().position.y = WALL_HEIGHT / 2 + PLAYER_HEIGHT;
             canJump = true;
         }
     }
@@ -213,7 +204,7 @@ const animate = function () {
 };
 
 // Initial position and start animation
-camera.position.set(0, WALL_HEIGHT / 2 + 1, MAZE_SIZE * CELL_SIZE / 2 + CELL_SIZE);
+camera.position.set(0, WALL_HEIGHT / 2 + PLAYER_HEIGHT, MAZE_SIZE * CELL_SIZE / 2 + CELL_SIZE);
 animate();
 
 // --- Handle Window Resizing ---
@@ -222,5 +213,3 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-

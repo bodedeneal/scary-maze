@@ -89,7 +89,7 @@ const { group: mazeMesh } = createMazeMesh(generatedMaze);
 scene.add(mazeMesh);
 
 // --- Player Controls and Movement ---
-let controls = new THREE.PointerLockControls(camera, renderer.domElement);
+const controls = new THREE.PointerLockControls(camera, renderer.domElement);
 let moveForward = false;
 let moveBackward = false;
 let moveLeft = false;
@@ -100,7 +100,7 @@ const direction = new THREE.Vector3();
 const playerSpeed = 100.0;
 const jumpHeight = 30;
 
-// Lock pointer on first user interaction
+// Lock pointer on first user interaction with the body
 document.body.addEventListener('click', function () {
     controls.lock();
 }, false);
@@ -133,33 +133,38 @@ document.addEventListener('keydown', onKeyDown, false);
 document.addEventListener('keyup', onKeyUp, false);
 
 // --- Collision Detection (Simplified Raycasting) ---
-const raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
+const raycaster = new THREE.Raycaster();
 
 function checkCollisions() {
-    if (!controls) return;
+    if (!controls.isLocked) return;
     const playerPosition = controls.getObject().position;
-    const playerDirection = controls.getDirection(new THREE.Vector3());
-    const playerUp = camera.up;
+    const halfCellSize = CELL_SIZE / 2;
 
-    // Check forward/backward collisions
-    const forwardRaycaster = new THREE.Raycaster(playerPosition, playerDirection, 0, CELL_SIZE / 2);
-    if (forwardRaycaster.intersectObjects(walls).length > 0) {
-        velocity.z = 0;
-    }
-    const backwardRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().negate(), 0, CELL_SIZE / 2);
-    if (backwardRaycaster.intersectObjects(walls).length > 0) {
-        velocity.z = 0;
-    }
+    const collisionDirections = [
+        new THREE.Vector3(0, 0, -1), // Forward
+        new THREE.Vector3(0, 0, 1),  // Backward
+        new THREE.Vector3(-1, 0, 0), // Left
+        new THREE.Vector3(1, 0, 0)   // Right
+    ];
 
-    // Check left/right collisions
-    const rightRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().cross(playerUp), 0, CELL_SIZE / 2);
-    if (rightRaycaster.intersectObjects(walls).length > 0) {
-        velocity.x = 0;
-    }
-    const leftRaycaster = new THREE.Raycaster(playerPosition, playerDirection.clone().cross(playerUp).negate(), 0, CELL_SIZE / 2);
-    if (leftRaycaster.intersectObjects(walls).length > 0) {
-        velocity.x = 0;
-    }
+    const currentDirection = new THREE.Vector3();
+    controls.getDirection(currentDirection);
+
+    const horizontalDirection = new THREE.Vector3(currentDirection.x, 0, currentDirection.z).normalize();
+    const rightDirection = new THREE.Vector3(horizontalDirection.z, 0, -horizontalDirection.x);
+
+    const checkDir = (dir, speed) => {
+        raycaster.set(playerPosition, dir);
+        const intersects = raycaster.intersectObjects(walls);
+        if (intersects.length > 0 && intersects[0].distance < halfCellSize + 0.1) {
+            speed.set(0, 0, 0);
+        }
+    };
+    
+    if (moveForward) checkDir(horizontalDirection, velocity);
+    if (moveBackward) checkDir(horizontalDirection.negate(), velocity);
+    if (moveRight) checkDir(rightDirection, velocity);
+    if (moveLeft) checkDir(rightDirection.negate(), velocity);
 }
 
 
@@ -170,7 +175,7 @@ const animate = function () {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
 
-    if (controls && controls.isLocked) {
+    if (controls.isLocked) {
         // Apply friction
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;

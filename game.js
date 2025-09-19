@@ -5,6 +5,17 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
+// --- Lights ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
+scene.add(ambientLight);
+
+const spotLight = new THREE.SpotLight(0xffffff, 1, 0, Math.PI / 8, 0.5, 2);
+spotLight.position.set(0, 0, 0); // Position relative to camera
+spotLight.target.position.set(0, 0, -1);
+camera.add(spotLight);
+camera.add(spotLight.target);
+scene.add(camera);
+
 // --- Maze Generation Parameters ---
 const MAZE_SIZE = 21; // Must be an odd number
 const CELL_SIZE = 5;
@@ -15,7 +26,7 @@ function generateMaze(size) {
     const maze = new Array(size).fill(0).map(() => new Array(size).fill(1));
     function carvePath(x, y) {
         maze[y][x] = 0;
-        const directions = [[0, -2],, [-2, 0],].sort(() => Math.random() - 0.5);
+        const directions = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
         for (const [dx, dy] of directions) {
             const nextX = x + dx;
             const nextY = y + dy;
@@ -33,8 +44,8 @@ function generateMaze(size) {
 const walls = [];
 function createMazeMesh(maze) {
     const group = new THREE.Group();
-    const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
-    const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+    const wallMaterial = new THREE.MeshPhongMaterial({ color: 0x555555 });
+    const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x888888 });
     const totalSize = MAZE_SIZE * CELL_SIZE;
 
     // Create the floor
@@ -90,32 +101,26 @@ const jumpHeight = 30;
 const blocker = document.getElementById('blocker');
 const instructions = document.getElementById('instructions');
 
-// Add event listener directly to the instructions element
+// Initialize controls on user click
 instructions.addEventListener('click', function () {
     controls = new THREE.PointerLockControls(camera, renderer.domElement);
     controls.lock();
 }, false);
 
 // Event listeners for pointer lock status changes
-let controlsEnabled = false;
-instructions.addEventListener('click', function () {
-    controls.lock();
-}, false);
-
 controls.addEventListener('lock', function () {
-    controlsEnabled = true;
     instructions.style.display = 'none';
     blocker.style.display = 'none';
 });
+
 controls.addEventListener('unlock', function () {
-    controlsEnabled = false;
     blocker.style.display = 'block';
     instructions.style.display = '';
 });
 
 // Keyboard event listeners for movement
 const onKeyDown = function (event) {
-    if (controlsEnabled) {
+    if (controls.isLocked) {
         switch (event.code) {
             case 'ArrowUp': case 'KeyW': moveForward = true; break;
             case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
@@ -138,41 +143,30 @@ const onKeyUp = function (event) {
 document.addEventListener('keydown', onKeyDown, false);
 document.addEventListener('keyup', onKeyUp, false);
 
-// --- Collision Detection (simplified) ---
+// --- Collision Detection (Simplified Raycasting) ---
 const raycaster = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 10);
 const playerRadius = 0.5;
 
-function checkCollisions(delta) {
+function checkCollisions() {
     const playerPosition = controls.getObject().position;
-    const playerDirection = controls.getDirection(new THREE.Vector3());
 
-    const raycasterForward = new THREE.Raycaster(playerPosition, playerDirection, 0, playerRadius + 0.1);
-    const intersectsForward = raycasterForward.intersectObjects(walls);
+    const directions = [
+        new THREE.Vector3(0, 0, 1), // Forward
+        new THREE.Vector3(0, 0, -1), // Backward
+        new THREE.Vector3(1, 0, 0), // Right
+        new THREE.Vector3(-1, 0, 0) // Left
+    ];
 
-    if (intersectsForward.length > 0) {
-        // Stop movement if colliding
-        velocity.z = 0;
-    }
+    for (const dir of directions) {
+        raycaster.set(playerPosition, dir);
+        const intersects = raycaster.intersectObjects(walls);
 
-    const raycasterBack = new THREE.Raycaster(playerPosition, playerDirection.clone().negate(), 0, playerRadius + 0.1);
-    const intersectsBack = raycasterBack.intersectObjects(walls);
-
-    if (intersectsBack.length > 0) {
-        velocity.z = 0;
-    }
-
-    const raycasterRight = new THREE.Raycaster(playerPosition, new THREE.Vector3(playerDirection.z, 0, -playerDirection.x), 0, playerRadius + 0.1);
-    const intersectsRight = raycasterRight.intersectObjects(walls);
-    
-    if (intersectsRight.length > 0) {
-        velocity.x = 0;
-    }
-
-    const raycasterLeft = new THREE.Raycaster(playerPosition, new THREE.Vector3(-playerDirection.z, 0, playerDirection.x), 0, playerRadius + 0.1);
-    const intersectsLeft = raycasterLeft.intersectObjects(walls);
-
-    if (intersectsLeft.length > 0) {
-        velocity.x = 0;
+        if (intersects.length > 0 && intersects[0].distance < playerRadius + 0.5) {
+            if (dir.x > 0) velocity.x = 0;
+            if (dir.x < 0) velocity.x = 0;
+            if (dir.z > 0) velocity.z = 0;
+            if (dir.z < 0) velocity.z = 0;
+        }
     }
 }
 
@@ -184,7 +178,7 @@ const animate = function () {
     const time = performance.now();
     const delta = (time - prevTime) / 1000;
 
-    if (controls && controlsEnabled) {
+    if (controls && controls.isLocked) {
         // Apply friction
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
@@ -198,8 +192,8 @@ const animate = function () {
         if (moveForward || moveBackward) velocity.z -= direction.z * playerSpeed * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * playerSpeed * delta;
 
-        // Perform basic collision detection
-        checkCollisions(delta);
+        // Perform simplified collision detection
+        checkCollisions();
 
         // Apply final velocity to position
         controls.moveRight(-velocity.x * delta);
